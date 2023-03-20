@@ -1,15 +1,38 @@
 // SPDX-License-Identifier: AGPLv3
-pragma solidity >= 0.8.0;
+pragma solidity >= 0.8.4;
 
 import { ISuperAgreement } from "../superfluid/ISuperAgreement.sol";
 import { ISuperfluidToken } from "../superfluid/ISuperfluidToken.sol";
-
 
 /**
  * @title Constant Flow Agreement interface
  * @author Superfluid
  */
 abstract contract IConstantFlowAgreementV1 is ISuperAgreement {
+
+    /**************************************************************************
+     * Errors
+     *************************************************************************/
+    error CFA_ACL_NO_SENDER_CREATE();               // 0x4b993136
+    error CFA_ACL_NO_SENDER_UPDATE();               // 0xedfa0d3b
+    error CFA_ACL_OPERATOR_NO_CREATE_PERMISSIONS(); // 0xa3eab6ac
+    error CFA_ACL_OPERATOR_NO_UPDATE_PERMISSIONS(); // 0xac434b5f
+    error CFA_ACL_OPERATOR_NO_DELETE_PERMISSIONS(); // 0xe30f1bff
+    error CFA_ACL_FLOW_RATE_ALLOWANCE_EXCEEDED();   // 0xa0645c1f
+    error CFA_ACL_UNCLEAN_PERMISSIONS();            // 0x7939d66c
+    error CFA_ACL_NO_SENDER_FLOW_OPERATOR();        // 0xb0ed394d
+    error CFA_ACL_NO_NEGATIVE_ALLOWANCE();          // 0x86e0377d
+    error CFA_FLOW_ALREADY_EXISTS();                // 0x801b6863
+    error CFA_FLOW_DOES_NOT_EXIST();                // 0x5a32bf24
+    error CFA_INSUFFICIENT_BALANCE();               // 0xea76c9b3
+    error CFA_ZERO_ADDRESS_SENDER();                // 0x1ce9b067
+    error CFA_ZERO_ADDRESS_RECEIVER();              // 0x78e02b2a
+    error CFA_HOOK_OUT_OF_GAS();                    // 0x9f76430b
+    error CFA_DEPOSIT_TOO_BIG();                    // 0x752c2b9c
+    error CFA_FLOW_RATE_TOO_BIG();                  // 0x0c9c55c1
+    error CFA_NON_CRITICAL_SENDER();                // 0xce11b5d1
+    error CFA_INVALID_FLOW_RATE();                  // 0x91acad16
+    error CFA_NO_SELF_FLOW();                       // 0xa47338ef
 
     /// @dev ISuperAgreement.agreementType implementation
     function agreementType() external override pure returns (bytes32) {
@@ -53,7 +76,7 @@ abstract contract IConstantFlowAgreementV1 is ISuperAgreement {
     function isPatricianPeriodNow(
         ISuperfluidToken token,
         address account)
-        public view virtual
+        external view virtual
         returns (bool isCurrentlyPatricianPeriod, uint256 timestamp);
 
     /**
@@ -87,6 +110,38 @@ abstract contract IConstantFlowAgreementV1 is ISuperAgreement {
     ) 
         external virtual
         returns(bytes memory newCtx);
+
+    /**
+     * @notice msgSender from `ctx` increases flow rate allowance for the `flowOperator` by `addedFlowRateAllowance`
+     * @dev if `addedFlowRateAllowance` is negative, we revert with CFA_ACL_NO_NEGATIVE_ALLOWANCE
+     * @param token Super token address
+     * @param flowOperator The permission grantee address
+     * @param addedFlowRateAllowance The flow rate allowance delta
+     * @param ctx Context bytes (see ISuperfluid.sol for Context struct)
+     * @return newCtx The new context bytes
+     */
+    function increaseFlowRateAllowance(
+        ISuperfluidToken token,
+        address flowOperator,
+        int96 addedFlowRateAllowance,
+        bytes calldata ctx
+    ) external virtual returns(bytes memory newCtx);
+
+    /**
+     * @dev msgSender from `ctx` decreases flow rate allowance for the `flowOperator` by `subtractedFlowRateAllowance`
+     * @dev if `subtractedFlowRateAllowance` is negative, we revert with CFA_ACL_NO_NEGATIVE_ALLOWANCE
+     * @param token Super token address
+     * @param flowOperator The permission grantee address
+     * @param subtractedFlowRateAllowance The flow rate allowance delta
+     * @param ctx Context bytes (see ISuperfluid.sol for Context struct)
+     * @return newCtx The new context bytes
+     */
+    function decreaseFlowRateAllowance(
+        ISuperfluidToken token,
+        address flowOperator,
+        int96 subtractedFlowRateAllowance,
+        bytes calldata ctx
+    ) external virtual returns(bytes memory newCtx);
 
     /**
      * @dev msgSender from `ctx` grants `flowOperator` all permissions with flowRateAllowance as type(int96).max

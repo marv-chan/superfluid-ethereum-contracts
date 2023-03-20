@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPLv3
-pragma solidity >= 0.8.2;
+pragma solidity >= 0.8.4;
 
 import { ISuperfluidGovernance } from "./ISuperfluidGovernance.sol";
 import { ISuperfluidToken } from "./ISuperfluidToken.sol";
@@ -29,6 +29,39 @@ import { IERC777 } from "@openzeppelin/contracts/token/ERC777/IERC777.sol";
  *
  */
 interface ISuperfluid {
+
+    /**************************************************************************
+     * Errors
+     *************************************************************************/
+    // Superfluid Custom Errors
+    error HOST_AGREEMENT_CALLBACK_IS_NOT_ACTION();              // 0xef4295f6
+    error HOST_CANNOT_DOWNGRADE_TO_NON_UPGRADEABLE();           // 0x474e7641
+    error HOST_CALL_AGREEMENT_WITH_CTX_FROM_WRONG_ADDRESS();    // 0x0cd0ebc2
+    error HOST_CALL_APP_ACTION_WITH_CTX_FROM_WRONG_ADDRESS();   // 0x473f7bd4
+    error HOST_INVALID_CONFIG_WORD();                           // 0xf4c802a4
+    error HOST_MAX_256_AGREEMENTS();                            // 0x7c281a78
+    error HOST_NON_UPGRADEABLE();                               // 0x14f72c9f
+    error HOST_NON_ZERO_LENGTH_PLACEHOLDER_CTX();               // 0x67e9985b
+    error HOST_ONLY_GOVERNANCE();                               // 0xc5d22a4e
+    error HOST_UNKNOWN_BATCH_CALL_OPERATION_TYPE();             // 0xb4770115
+    error HOST_AGREEMENT_ALREADY_REGISTERED();                  // 0xdc9ddba8
+    error HOST_AGREEMENT_IS_NOT_REGISTERED();                   // 0x1c9e9bea
+    error HOST_MUST_BE_CONTRACT();                              // 0xd4f6b30c
+    error HOST_ONLY_LISTED_AGREEMENT();                         // 0x619c5359
+
+    // App Related Custom Errors
+    // uses SuperAppDefinitions' App Jail Reasons as _code
+    error APP_RULE(uint256 _code);                              // 0xa85ba64f
+
+    error HOST_INVALID_OR_EXPIRED_SUPER_APP_REGISTRATION_KEY(); // 0x19ab84d1
+    error HOST_NOT_A_SUPER_APP();                               // 0x163cbe43
+    error HOST_NO_APP_REGISTRATION_PERMISSIONS();               // 0x5b93ebf0
+    error HOST_RECEIVER_IS_NOT_SUPER_APP();                     // 0x96aa315e
+    error HOST_SENDER_IS_NOT_SUPER_APP();                       // 0xbacfdc40
+    error HOST_SOURCE_APP_NEEDS_HIGHER_APP_LEVEL();             // 0x44725270
+    error HOST_SUPER_APP_IS_JAILED();                           // 0x02384b64
+    error HOST_SUPER_APP_ALREADY_REGISTERED();                  // 0x01b0a935
+    error HOST_UNAUTHORIZED_SUPER_APP_FACTORY();                // 0x289533c5
 
     /**************************************************************************
      * Time
@@ -222,10 +255,10 @@ interface ISuperfluid {
     function isApp(ISuperApp app) external view returns(bool);
 
     /**
-     * @dev Query app level
+     * @dev Query app callbacklevel
      * @param app Super app address
      */
-    function getAppLevel(ISuperApp app) external view returns(uint8 appLevel);
+    function getAppCallbackLevel(ISuperApp app) external view returns(uint8 appCallbackLevel);
 
     /**
      * @dev Get the manifest of the super app
@@ -269,7 +302,7 @@ interface ISuperfluid {
      * Agreement Framework
      *
      * Agreements use these function to trigger super app callbacks, updates
-     * app allowance and charge gas fees.
+     * app credit and charge gas fees.
      *
      * These functions can only be called by registered agreements.
      *************************************************************************/
@@ -316,16 +349,16 @@ interface ISuperfluid {
      * @dev (For agreements) Create a new callback stack
      * @param  ctx                     The current ctx, it will be validated.
      * @param  app                     The super app.
-     * @param  appAllowanceGranted     App allowance granted so far.
-     * @param  appAllowanceUsed        App allowance used so far.
+     * @param  appCreditGranted        App credit granted so far.
+     * @param  appCreditUsed           App credit used so far.
      * @return newCtx                  The current context of the transaction.
      */
     function appCallbackPush(
         bytes calldata ctx,
         ISuperApp app,
-        uint256 appAllowanceGranted,
-        int256 appAllowanceUsed,
-        ISuperfluidToken appAllowanceToken
+        uint256 appCreditGranted,
+        int256 appCreditUsed,
+        ISuperfluidToken appCreditToken
     )
         external
         // onlyAgreement
@@ -335,32 +368,30 @@ interface ISuperfluid {
     /**
      * @dev (For agreements) Pop from the current app callback stack
      * @param  ctx                     The ctx that was pushed before the callback stack.
-     * @param  appAllowanceUsedDelta   App allowance used by the app.
+     * @param  appCreditUsedDelta      App credit used by the app.
      * @return newCtx                  The current context of the transaction.
      *
-     * @custom:security 
+     * @custom:security
      * - Here we cannot do assertValidCtx(ctx), since we do not really save the stack in memory.
      * - Hence there is still implicit trust that the agreement handles the callback push/pop pair correctly.
      */
     function appCallbackPop(
         bytes calldata ctx,
-        int256 appAllowanceUsedDelta
+        int256 appCreditUsedDelta
     )
         external
         // onlyAgreement
         returns (bytes memory newCtx);
 
     /**
-     * @dev (For agreements) Use app allowance.
+     * @dev (For agreements) Use app credit.
      * @param  ctx                      The current ctx, it will be validated.
-     * @param  appAllowanceWantedMore   See app allowance for more details.
-     * @param  appAllowanceUsedDelta    See app allowance for more details.
+     * @param  appCreditUsedMore        See app credit for more details.
      * @return newCtx                   The current context of the transaction.
      */
-    function ctxUseAllowance(
+    function ctxUseCredit(
         bytes calldata ctx,
-        uint256 appAllowanceWantedMore,
-        int256 appAllowanceUsedDelta
+        int256 appCreditUsedMore
     )
         external
         // onlyAgreement
@@ -455,13 +486,14 @@ interface ISuperfluid {
      * - The order of the fields hence should not be rearranged in order to be backward compatible:
      *    - non-dynamic fields will be parsed at the same memory location,
      *    - and dynamic fields will simply have a greater offset than it was.
+     * - We cannot change the structure of the Context struct because of ABI compatibility requirements
      */
     struct Context {
         //
         // Call context
         //
-        // callback level
-        uint8 appLevel;
+        // app callback level
+        uint8 appCallbackLevel;
         // type of call
         uint8 callType;
         // the system timestamp
@@ -480,16 +512,23 @@ interface ISuperfluid {
         //
         // App context
         //
-        // app allowance granted
-        uint256 appAllowanceGranted;
-        // app allowance wanted by the app callback
-        uint256 appAllowanceWanted;
-        // app allowance used, allowing negative values over a callback session
-        int256 appAllowanceUsed;
+        // app credit granted
+        uint256 appCreditGranted;
+        // app credit wanted by the app callback
+        uint256 appCreditWantedDeprecated;
+        // app credit used, allowing negative values over a callback session
+        // the appCreditUsed value over a callback sessions is calculated with:
+        // existing flow data owed deposit + sum of the callback agreements
+        // deposit deltas 
+        // the final value used to modify the state is determined by the
+        // _adjustNewAppCreditUsed function (in AgreementLibrary.sol) which takes 
+        // the appCreditUsed value reached in the callback session and the app
+        // credit granted
+        int256 appCreditUsed;
         // app address
         address appAddress;
-        // app allowance in super token
-        ISuperfluidToken appAllowanceToken;
+        // app credit in super token
+        ISuperfluidToken appCreditToken;
     }
 
     function callAgreementWithContext(
@@ -513,7 +552,7 @@ interface ISuperfluid {
         // isAppActive(app)
         returns (bytes memory newCtx);
 
-    function decodeCtx(bytes calldata ctx)
+    function decodeCtx(bytes memory ctx)
         external pure
         returns (Context memory context);
 
@@ -538,13 +577,13 @@ interface ISuperfluid {
      * @dev Batch call function
      * @param operations Array of batch operations
      */
-    function batchCall(Operation[] memory operations) external;
+    function batchCall(Operation[] calldata operations) external;
 
     /**
      * @dev Batch call function for trusted forwarders (EIP-2771)
      * @param operations Array of batch operations
      */
-    function forwardBatchCall(Operation[] memory operations) external;
+    function forwardBatchCall(Operation[] calldata operations) external;
 
     /**************************************************************************
      * Function modifiers for access control and parameter validations

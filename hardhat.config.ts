@@ -1,13 +1,15 @@
 import {HardhatUserConfig, subtask} from "hardhat/config";
+import "@typechain/hardhat";
 import "@nomiclabs/hardhat-web3";
-import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-truffle5";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomiclabs/hardhat-ethers";
 import {TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS} from "hardhat/builtin-tasks/task-names";
 import "solidity-coverage";
 import {config as dotenvConfig} from "dotenv";
 import {NetworkUserConfig} from "hardhat/types";
 import "solidity-docgen";
-import { resolve, relative } from "path";
+import {relative} from "path";
 
 try {
     dotenvConfig();
@@ -28,18 +30,15 @@ subtask(TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS).setAction(
 
 const chainIds = {
     "eth-mainnet": 1,
-    "eth-ropsten": 3,
-    "eth-rinkeby": 4,
-    "eth-kovan": 42,
     "eth-goerli": 5,
 
     "xdai-mainnet": 100,
 
     "optimism-mainnet": 10,
-    "optimism-kovan": 69,
+    "optimism-goerli": 420,
 
     "arbitrum-one": 42161,
-    "arbitrum-rinkeby": 421611,
+    "arbitrum-goerli": 421613,
 
     "polygon-mainnet": 137,
     "polygon-mumbai": 80001,
@@ -47,20 +46,29 @@ const chainIds = {
     "avalanche-c": 43114,
     "avalanche-fuji": 43113,
 
-    localhost: 1337,
+    "bsc-mainnet": 56,
+
+    "celo-mainnet": 42220,
+
+    localhost: 31337,
     hardhat: 31337,
 };
+
 function createNetworkConfig(
     network: keyof typeof chainIds
 ): NetworkUserConfig {
     return {
-        accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+        accounts:
+            process.env.PRIVATE_KEY !== undefined
+                ? [process.env.PRIVATE_KEY]
+                : [],
         chainId: chainIds[network],
     };
 }
+
 const config: HardhatUserConfig = {
     solidity: {
-        version: "0.8.14",
+        version: "0.8.19",
         settings: {
             optimizer: {
                 enabled: true,
@@ -69,17 +77,9 @@ const config: HardhatUserConfig = {
         },
     },
     networks: {
-        localhost: {
-            ...createNetworkConfig("localhost"),
-            url: "http://0.0.0.0:8545/",
-        },
-        "eth-ropsten": {
-            ...createNetworkConfig("eth-ropsten"),
-            url: process.env.ROPSTEN_PROVIDER_URL || "",
-        },
-        "eth-rinkeby": {
-            ...createNetworkConfig("eth-rinkeby"),
-            url: process.env.RINKEBY_PROVIDER_URL || "",
+        "bsc-mainnet": {
+            ...createNetworkConfig("bsc-mainnet"),
+            url: process.env.BSC_PROVIDER_URL || "",
         },
         "eth-goerli": {
             ...createNetworkConfig("eth-goerli"),
@@ -91,19 +91,19 @@ const config: HardhatUserConfig = {
         },
         "optimism-mainnet": {
             ...createNetworkConfig("optimism-mainnet"),
-            url: process.env.OPKOVAN_PROVIDER_URL || "",
+            url: process.env.OPMAINNET_PROVIDER_URL || "",
         },
-        "optimism-kovan": {
-            ...createNetworkConfig("optimism-kovan"),
-            url: process.env.OPKOVAN_PROVIDER_URL || "",
+        "optimism-goerli": {
+            ...createNetworkConfig("optimism-goerli"),
+            url: process.env.OPGOERLI_PROVIDER_URL || "",
         },
         "arbitrum-one": {
             ...createNetworkConfig("arbitrum-one"),
-            url: process.env.ARBRINKEBY_PROVIDER_URL || "",
+            url: process.env.ARBONE_PROVIDER_URL || "",
         },
-        "arbitrum-rinkeby": {
-            ...createNetworkConfig("arbitrum-rinkeby"),
-            url: process.env.ARBRINKEBY_PROVIDER_URL || "",
+        "arbitrum-goerli": {
+            ...createNetworkConfig("arbitrum-goerli"),
+            url: process.env.ARBGOERLI_PROVIDER_URL || "",
         },
         "polygon-mainnet": {
             ...createNetworkConfig("polygon-mainnet"),
@@ -121,6 +121,10 @@ const config: HardhatUserConfig = {
             ...createNetworkConfig("avalanche-fuji"),
             url: process.env.AVALANCHE_PROVIDER_URL || "",
         },
+        "celo-mainnet": {
+            ...createNetworkConfig("celo-mainnet"),
+            url: process.env.CELO_MAINNET_PROVIDER_URL || "",
+        },
         coverage: {
             url: "http://127.0.0.1:8555",
         },
@@ -131,10 +135,15 @@ const config: HardhatUserConfig = {
     docgen: {
         outputDir: "docs/api",
         templates: "./docs/docgen-templates",
-        pages: (item: any, file: any) => file.absolutePath.startsWith('contracts/interfaces/')
-            ? relative('contracts', file.absolutePath).replace('.sol', '.md')
-            : undefined,
+        pages: (item: any, file: any) =>
+            file.absolutePath.startsWith("contracts/interfaces/")
+                ? relative("contracts", file.absolutePath).replace(
+                      ".sol",
+                      ".md"
+                  )
+                : undefined,
     },
+    typechain: {target: "ethers-v5"},
 };
 
 export default config;
